@@ -4,7 +4,7 @@ from django.db import models
 from django.db import models
 from django.contrib.auth.models import User
 
-class Catergory(models.Model):
+class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank = True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -20,7 +20,7 @@ class InventoryItem(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     quantity = models.PositiveIntegerField(default=0)
-    category = models.ForeignKey(Catergory, on_delete=models.SET_NULL, null=True, related_name='items')
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='items')
     low_stock_threshold = models.PositiveIntegerField(default=10)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE,related_name='inventory_items')
     date_added = models.DateTimeField(auto_now_add=True)
