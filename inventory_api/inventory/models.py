@@ -18,6 +18,7 @@ class InventoryItem(models.Model):
     description = models.TextField(blank=True)
     quantity = models.PositiveIntegerField(default=0)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='items')
+    price = models.DecimalField(max_digits=10, decimal_places=2,)
     low_stock_threshold = models.PositiveIntegerField(default=10)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE,related_name='inventory_items')
     date_added = models.DateTimeField(auto_now_add=True)

@@ -73,6 +73,43 @@ class InventoryItemCreateSerializer(InventoryItemSerializer):
             note= 'Item created. ' ,
         )
         return item
+class InventoryItemUpdateSerializer(InventoryItemSerializer):
+    def update(self, instance, validated_data):
+        previous_quantity = instance.quantity
+        item = super().update(instance,validated_data)
+        if previous_quantity != item.quantity:
+            delta = item.quantity - previous_quantity
+            InventoryChangeLog.objects.create(
+                item = item,
+                changed_by = self.context['request'].user,
+                change_type = 'restock' if delta > 0 else 'sale',
+                previous_quantity = previous_quantity,
+                new_quantity = item.quantity,
+            )
+        return item
     
+    
+    # CHANGE LOG
+class InventoryChangeLogSerializer(serializers.ModelSerializer):
+    item_name = serializers.ReadOnlyField(source='item.name')
+    changed_by = serializers.ReadOnlyField(source = 'changed_by.username')
+
+    class Meta:
+        model = InventoryChangeLog
+        fields = [
+            'id', 'item', 'changed_by', 'change_type', 'previous_quantity', 'new_quantity', 'quantity_delta','note',
+            'timestamp', 'item_name'
+        ]
+
+
+class InventoryLevelSerializer(serializers.ModelSerializer):
+    stock_status = serializers.ReadOnlyField()
+    category_name = serializers.ReadOnlyField(source= 'category.name')
+
+    class Meta:
+        model = InventoryItem
+        fields = [''
+        'id', 'name','category_name', 'quantity', 'low_stock_threshold', 'stock_status',
+        ]
 
       

@@ -1,19 +1,19 @@
 from django.shortcuts import render
-from rest_framework import APIView, filters, status
+from rest_framework.views import APIView
+from rest_framework import filters, status
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from django.contrib.auth.models import User
 from django.db.models import F, Sum, Count
-from .django_filters.rest_framework import DjangoFilterBackend
+from django_filters.rest_framework import DjangoFilterBackend
 
 
 from .models import Category, InventoryItem, InventoryChangeLog
 from .serializers import (UserSerializer, CategorySerializer, InventoryItemSerializer,InventoryItemCreateSerializer,
                           InventoryItemUpdateSerializer, InventoryChangeLogSerializer,InventoryLevelSerializer)
 from .filters import InventoryItemFilter
-from inventory_api.inventory.permissions import IsAdminOrReadOnly
-from .filters import OrderingFilter, SearchFilter
+from .permissions import IsOwnerOrReadOnly, IsAdminOrReadOnly, IsSelfOrAdmin
 
 
 #Auth
@@ -23,10 +23,10 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
 #Users
-class UserListCreateView(generics.ListCreateApiView):
+class UserListCreateView(generics.ListCreateAPIView):
     queryset = User.objects.all().order_by('id')
-    serializer = UserSerializer
-    permission_classes = [IsAuthenticated,IsAdminOrReadOnly]
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['username', 'email']
     ordering_fields = ['username',  'date_joined']
@@ -34,11 +34,11 @@ class UserListCreateView(generics.ListCreateApiView):
 class UserRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permisssion_classes = [IsAuthenticated, IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
 
 #Categories
 class CategoryListCreateView(generics.ListCreateAPIView):
-    queryset = Category.objects.all().order_by
+    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
     filter_backends = [filters.SearchFilter,filters.OrderingFilter]
@@ -53,17 +53,30 @@ class CategoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 #Inventory Items
 class InventoryItemListCreateView(generics.ListCreateAPIView):
     queryset = InventoryItem.objects.select_related('category', 'created_by'). all()
-    permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated ]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = InventoryItemFilter
     search_fields = ['name','description','category__name']
     ordering_fields = ['name', 'quantity', 'price', 'date_added']
     ordering = ['name']
 
     def get_serializer_class(self):
+        if self.request.method == ['POST']:
+            return InventoryItemCreateSerializer
+        return InventoryItemSerializer
+    
+    def perform_create(self,serializer):
+        serializer.save(created_by=self.request.user)
+
+class InventoryItemRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = InventoryItem.objects.select_related('category','created_by').all()
+    permission_classes = [IsAuthenticated, IsAdminOrReadOnly]
+
+    def get_serializer_class(self):
         if self.request.method in ['PUT','PATCH']:
             return InventoryItemUpdateSerializer
         return InventoryItemSerializer
-    
+       
 #inventory levels
 class InventoryLevelView(APIView):
     permission_classes = [IsAuthenticated]
@@ -85,9 +98,9 @@ class InventoryLevelView(APIView):
             elif stock_status == 'in stock':
                 queryset = queryset.filter(quantity__gt=F('low_stock_threshold'))
 
-            total_value = sum(i.quantity * i.price for i in all_items)
+        total_value = sum(i.quantity * i.price for i in all_items)
 
-            data = {
+        data = {
                 'summary': {
                 'total_items' : all_items.count(),
                 'total_quantity': all_items.aggregate(t=Sum('quantity'))['t'] or 0,
@@ -97,7 +110,7 @@ class InventoryLevelView(APIView):
                 },
                 'items':InventoryLevelSerializer(queryset, many=True).data,
             }
-            return Response(data, status=status.HTTP_200_OK)
+        return Response(data, status=status.HTTP_200_OK)
         
 #Change Logs
 class InventoryChangeLogListView(generics.ListAPIView):
